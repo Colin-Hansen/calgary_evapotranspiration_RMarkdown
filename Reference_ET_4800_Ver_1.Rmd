@@ -1,0 +1,492 @@
+---
+title: "Calgary Airport Reference ET - ACIS Data"
+author: "Colin Hansen, M.Eng., P. Eng."
+date: "March-2021"
+# https://stackoverflow.com/questions/25849814/rstudio-rmarkdown-both-portrait-and-landscape-layout-in-a-single-pdf/41945462#41945462
+header-includes:
+- \usepackage{pdflscape}
+- \newcommand{\blandscape}{\begin{landscape}}
+- \newcommand{\elandscape}{\end{landscape}}
+
+output:
+  
+  pdf_document: default
+  word_document: default
+  
+# latex_engine: xelatex
+
+# output:
+#   word_document: default
+#   html_notebook: default
+#   pdf_document: default
+#   html_document:
+#     df_print: paged
+    
+---
+
+##Project Description
+
+Compute the reference ET for the Calgary Airport CS station. 
+
+Raw climate and solar radiation data was obtained from the Alberta Climate Information Service:
+
+https://acis.alberta.ca/acis/weather-data-viewer.jsp
+
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+# note to self; load 'plyr' before 'dplyr' / 'tidyverse'; see page 151 ' R for Everyone'
+
+library(plyr)
+library(tidyverse)
+# note: tidyverse includes 'dplyr' package but not 'plyr'
+
+library(printr)
+library(reshape2)
+library(pander)
+
+library(lubridate)
+library(scales)
+library(rio)
+library(knitr)
+library(tinytex)
+library(ggnewscale)
+library(hydroTSM)
+library(cowplot)
+library(flextable)
+library(officer) #see page 30 'flextable' package
+
+panderOptions('knitr.auto.asis', FALSE)
+
+
+```
+
+
+
+
+```{r read-and-process-raw-data, eval = TRUE, include=FALSE}
+
+# remove all the files saved from the previous session
+rm(list=ls())
+
+
+  # get the names of the raw data files
+  raw_data_filenames<-dir('data_in',full.names = TRUE)
+  
+ 
+  # raw_data_filenames<-raw_data_filenames[5:9] # TESTING ONLY
+ 
+  
+  # enter loop to create a list of the raw data filenames (e.g. ACISDailyData_2016.csv, etc.)
+  
+  # create empty list
+  
+  raw_data_filenames_list <- list(NULL)
+  
+  for (q in seq_along(raw_data_filenames)) {  
+  
+  # build the list of raw data filenames 
+    
+  raw_data_filenames_list[q] <- list(raw_data_filenames[q])
+  
+    } # end of 'seq_along(raw_data_filenames)' 
+    
+ 
+ 
+
+  ### function ###
+  
+  process_raw_file_function <- function(x){
+    
+    
+      # read the ACIS climate data
+      climate_daily<-read.csv(x,header = TRUE,sep=",",stringsAsFactors = FALSE)
+    
+    
+      names(climate_daily)[2]<-"Date"
+      
+      # create Dates from character strings
+      dformat<-"%d-%B-%Y"
+      climate_daily$Date<-as.Date(climate_daily$Date,dformat)
+      climate_daily<- climate_daily[,c(1,2,3,5,8,11,14,17)]
+      names(climate_daily) <- c("Station.Name","Date","Tdew","Tmin","Tmax","Tmean","Rs","u10")
+     
+      # convert to tibble
+      climate_daily<-as_tibble(climate_daily)
+      
+      view(climate_daily)
+      
+      # add Year / Month / Day / DOY
+      climate_daily<-mutate(climate_daily,Year=year(Date),Month=month(Date),Day=mday(Date),DOY=yday(Date))
+      
+      # summarize missing data by column
+      Missing.Count<-apply(is.na(climate_daily),2,sum)
+      Column.Names<-names(climate_daily)
+      missing_data_df<-t(data.frame(Column.Names, Missing.Count))
+      write.table(missing_data_df,"ACIS_Missing_Data_Summary.csv",sep=",",col.names=FALSE,row.names=FALSE)
+      
+      # *** Year 2015 has missing u10 wind data ** replace with YYC 30 year normal of 16.1 km/hr ***
+      # ** Unused here but keep for now
+    
+      # u10_missing<-is.na(climate_daily$u10)
+      # climate_daily$u10[u10_missing]<-16.1
+      
+      # adjust wind speed units from km/hr to m/s
+      # climate_daily<-mutate(climate_daily,u10=u10*(1000/3600))
+      
+      # adjust wind speed to 2m height ** Eq. (S5.20 McMahon)
+      z<-10
+      climate_daily<-mutate(climate_daily,u2=u10*(4.87/(log(67.8*z-5.42))))
+      
+      # adjust Rs from(W/m2/day) to (MJ/m2/day)
+      climate_daily<-mutate(climate_daily,Rs=Rs*0.0864)
+      
+      #
+      # >>> Start Reference ET Calculations <<<
+      #
+      # general constants
+      
+      solar_constant_Gsc<-0.0820
+      Stef_Boltz<-4.903E-9
+      latent_heat_vap<-2.45
+      mean_density_air<-1.20
+      specific_heat_air<-0.001013
+      mean_density_water<-997.9
+      specific_heat_water<-0.00419
+      albedo_ref_crop<-0.23 #short grass
+    
+      # project specific constants and data
+      # location = Calgary Intl CS
+      stn_lat_rad<-0.892034
+      stn_elev_m<-1081
+      
+      # intermedidate calculations
+      
+      climate_daily<-mutate(climate_daily,svp_Tmax=0.6108*exp((17.27*Tmax)/(Tmax+237.3)))
+      climate_daily<-mutate(climate_daily,svp_Tmin=0.6108*exp((17.27*Tmin)/(Tmin+237.3)))
+      climate_daily<-mutate(climate_daily,daily_svp=((svp_Tmax+svp_Tmin)/2))
+      climate_daily<-mutate(climate_daily,mean_daily_avp=0.6108*exp((17.27*Tdew)/(Tdew+237.3)))
+      climate_daily<-mutate(climate_daily,slope_svp=4098*(0.6108*exp((17.27*Tmean)/(Tmean+237.3))/(Tmean+237.3)^2))
+      climate_daily<-mutate(climate_daily,atm_press=101.3*((293-0.0065*stn_elev_m)/293)^5.26)
+      climate_daily<-mutate(climate_daily,psychro_constant=0.00163*(atm_press/latent_heat_vap))
+      climate_daily<-mutate(climate_daily,dr2=1+0.033*cos((2*pi)/365*DOY))
+      climate_daily<-mutate(climate_daily,solar_decl=0.409*sin((2*pi/365)*DOY - 1.39))
+      climate_daily<-mutate(climate_daily,sunset_hour_angle=acos((-tan(stn_lat_rad)*tan(solar_decl))))
+      climate_daily<-mutate(climate_daily,Ra=((1440/pi)*solar_constant_Gsc*dr2*((sunset_hour_angle*sin(stn_lat_rad)*sin(solar_decl)+cos(stn_lat_rad)*cos(solar_decl)*sin(sunset_hour_angle)))))
+      climate_daily<-mutate(climate_daily,Rso=(0.75+2E-5*stn_elev_m)*Ra)
+      climate_daily<-mutate(climate_daily,Rnl=Stef_Boltz*(0.34-0.14*mean_daily_avp^0.5)*((Tmax+273.2)^4+(Tmin+273.2)^4)/2*(1.35*(Rs/Rso)-0.35))
+      climate_daily<-mutate(climate_daily,Rns=(1-albedo_ref_crop)*Rs)
+      climate_daily<-mutate(climate_daily,Rn=Rns-Rnl)
+      # calculate the reference ET radiation term
+      climate_daily<-mutate(climate_daily,ET_rad=(0.408*(slope_svp*Rn))/(slope_svp+psychro_constant*(1+0.34*u2)))
+      # calculate the reference ET aerodynamic term
+      climate_daily<-mutate(climate_daily,ET_aero=(psychro_constant*(900/(Tmean+273)))*u2*(daily_svp-mean_daily_avp)/(slope_svp+psychro_constant*(1+0.34*u2)))
+      # reference ET
+      climate_daily<-mutate(climate_daily,ET_rc=ET_rad+ET_aero)
+      
+      
+      # create directory to save the ET results
+      ET_folder_1<-'data_out/Ref_RET_Results_1'
+      
+      # create (if necessary) directory - ** first part
+      if(dir.exists(ET_folder_1) == FALSE) dir.create(ET_folder_1)
+      
+      
+      # extract the year from the raw data filename
+      raw_year <- str_extract(x,"[0-9] {4}")
+      
+    
+      # create a file name to save the files for each site (** dynamic **)
+      CSV_file_name<-paste0("YYC_Ref_ET_",raw_year,".csv")
+      CSV_outfile<-file.path(ET_folder_1, CSV_file_name)
+        
+      # write the results to .CSV file
+      write_csv(climate_daily,CSV_outfile)   
+  
+      
+            
+  }  # end 'process_raw_file_function'
+  
+  
+  
+    # use 'map' to apply 'process_raw_file_function' to the list of dataframes
+        
+    Ref_ET_data_list <- raw_data_filenames_list %>% map(process_raw_file_function)
+        
+    # use 'bind_rows' to combine the list of dataframes to one dataframe
+        
+    # ref_ET_data_df <- bind_rows(Ref_ET_data_list)      
+       
+    # view(ref_ET_data_df)
+  
+  
+    # create directory to save the ET results
+    # ET_folder_1<-'data_out/Ref_RET_Results_1'
+      
+    # create (if necessary) directory - ** first part
+    # if(dir.exists(ET_folder_1) == FALSE) dir.create(ET_folder_1)
+  
+    
+    # create a file name to save the files for each site
+    # CSV_file_name<-paste0(single_site_name,"_5_min.csv")
+    # CSV_outfile<-file.path(CSV_master_folder_5_min, CSV_file_name)
+      
+    # write the results to .CSV file
+    # write_csv(ref_ET_data_df,CSV_outfile)   
+  
+ 
+
+
+```
+
+\clearpage
+
+\blandscape
+
+## Some text ... 
+
+## Some more text ... 
+
+
+```{r stats-part-1, eval= FALSE, echo = FALSE,include = TRUE, message=FALSE, warning=FALSE, results = 'asis'}
+
+
+  # read a single .CSV file; generate basic summary stastics
+
+    # the name of the CSV file
+    csv_name<-list.files('data_out/MASTER_CSV_5_min')
+  
+      # specify the CSV directory location and path to read the CSV file
+      CSV_folder<-'data_out/MASTER_CSV_5_min'
+      CSV_infile<-file.path(CSV_folder, csv_name)
+      
+      # create site name prefix
+      site_prefix<-strtrim(csv_name,3)
+      # print(site_prefix)
+      
+      # create directory to save statistics results - 5 minute data
+      stats_folder_1<-'data_out/Stats_Summary_1'
+      
+      # create (if necessary) directory - ** first part
+      if(dir.exists(stats_folder_1) == FALSE) dir.create(stats_folder_1)
+      
+      # create directory to save statistics results
+      stats_folder_2<-'data_out/Stats_Summary_2'
+      
+      # create (if necessary) directory - ** first part
+      if(dir.exists(stats_folder_2) == FALSE) dir.create(stats_folder_2)
+      
+      # create directory to save statistics results
+      stats_folder_3<-'data_out/Stats_Summary_3'
+      
+      # create (if necessary) directory - ** first part
+      if(dir.exists(stats_folder_3) == FALSE) dir.create(stats_folder_3)
+      
+      # create directory to save statistics results
+      stats_folder_4<-'data_out/Stats_Summary_4'
+      
+      # create (if necessary) directory - ** first part
+      if(dir.exists(stats_folder_4) == FALSE) dir.create(stats_folder_4)
+      
+     
+      # delete any previous .CSV files in 'stats_folder_2/3/4'
+      files_to_remove<-dir('data_out/Stats_Summary_2',full.names = TRUE)
+      file.remove(files_to_remove)
+      
+      files_to_remove<-dir('data_out/Stats_Summary_3',full.names = TRUE)
+      file.remove(files_to_remove)
+      
+      files_to_remove<-dir('data_out/Stats_Summary_4',full.names = TRUE)
+      file.remove(files_to_remove)
+      
+      
+      
+      # read the rainfall data for one site using 'read_csv'
+      rain_5_min<-read_csv(CSV_infile,col_names = TRUE)
+      
+      view(head(rain_5_min))
+      
+      # get basic stats on the 5 minute rainfall data
+      
+      site.name <- rain_5_min$Site.Name[1]
+      
+      mean <- mean(rain_5_min$Rainfall,na.rm = TRUE)
+      
+      sd <- sd(rain_5_min$Rainfall,na.rm = TRUE)
+      
+      max <- max(rain_5_min$Rainfall,na.rm = TRUE)
+      
+      n.total <- nrow(rain_5_min)
+      
+      n.NA <- sum(is.na(rain_5_min$Rainfall))
+      
+      pct.missing <- (n.NA/n.total)*100
+      
+      n.non.zero <- nrow(subset(rain_5_min,Rainfall > 0))
+      
+      pct.non.zero <- (n.non.zero/n.total)*100
+      
+      n.May.to.Sept <- rain_5_min %>% filter(Month >= 5 & Month <= 9)
+      
+      n.May.to.Sept <- nrow(n.May.to.Sept)
+      
+      pct.May.to.Sept <- (n.May.to.Sept/n.total)*100
+      
+      # create dataframe of the results
+      
+      stats_5_min_df <- data.frame("Site.Name"=site.name,
+                                    "mean"=mean,
+                                    "std.dev"=sd,
+                                    "max"=max,
+                                    "n.total"=n.total,
+                                    "n.NA"=n.NA,
+                                    "pct.missing"=pct.missing,
+                                    "n.non.zero"=n.non.zero,
+                                    "pct.non.zero"=pct.non.zero,
+                                    "n.May.to.Sept"=n.May.to.Sept,
+                                    "pct.May.to.Sept"=pct.May.to.Sept)  
+      
+     
+      # keep the following line; but not sure if it works
+      # cat("\\newpage")
+      
+      
+      
+      # use the 'flextable' package to create table
+      
+      # set up a standard border to 'flextable'; requires 'officer' package
+      std_border <- fp_border(color="black",width=1.5)
+      
+      # KEEP THE FOLLOWING FOR NOW:
+      
+      # stats_5_min_df %>%  flextable() %>% 
+      # align(align="center",part = "all") %>% 
+      # set_caption(caption = "Rainfall Statistics: 5 minute Data") %>% 
+      # # font(fontname = "Calibri (Body)", part = "all") %>% 
+      # # fontsize(size = 10, part = "body") %>% 
+      # # add footer if you want
+      # # add_footer_row(values = "* p < 0.05. ** p < 0.01. *** p < 0.001.", 
+      # #                colwidths = 4) %>% 
+      # bold(bold=TRUE,part = "header") %>% 
+      # border_inner(border=std_border,part = "all") %>%
+      # fit_to_width(max_width = 8) %>%
+      # bg(bg="#EFEFEF") 
+      # # next line disabled  
+      # # autofit()
+          
+      # use the 'flextable' package to create table
+      
+      # the following is necessary to allow pdf-latex to be used (see page 96 'flextable' manual)
+      set_flextable_defaults(fonts_ignore=TRUE)
+      
+      # create table caption (dynamic)
+      table_caption<-paste0(site_prefix,' Rainfall Statistics: 5 minute Data')      
+      
+      stats_5_min_df %>%  flextable() %>%
+      # set_caption(caption = table_caption) %>%
+      fontsize(size = 10, part = "all") %>%
+      colformat_double(j=c(2,3,9,11),digits = 4) %>% 
+      theme_vanilla() %>%
+      fit_to_width(max_width = 8)
+      # # autofit()
+          
+       # insert line breaks
+      # cat("<br/>")
+      # cat("<br/>")
+      # cat("<br/>")
+    
+
+``` 
+\elandscape
+
+
+## Reference ET Statistics ...
+
+
+```{r stats-part-2, eval= FALSE, echo = FALSE,include = TRUE, message=FALSE, warning=FALSE, results = 'asis'}
+
+ 
+ # filter for the May to September rainfall
+      rain_5_min_may_sept <- rain_5_min %>% filter(Month >= 5 & Month <= 9)
+      
+      
+      # get the hourly / daily / weekly / monthly / yearly rainfall
+      
+      rain_hourly <- rain_5_min_may_sept %>% group_by(Year,Month,Week,Day,Hour) %>% dplyr::summarize(Rainfall.mm=sum(Rainfall))
+     
+      rain_daily <- rain_5_min_may_sept %>% group_by(Year,Month,Week,Day) %>% dplyr::summarize(Rainfall.mm=sum(Rainfall))
+      
+      rain_weekly <- rain_5_min_may_sept %>% group_by(Year,Month,Week) %>% dplyr::summarize(Rainfall.mm=sum(Rainfall))
+      
+      rain_monthly <- rain_5_min_may_sept %>% group_by(Year,Month) %>% dplyr::summarize(Rainfall.mm=sum(Rainfall))
+      
+      rain_yearly <- rain_5_min_may_sept %>% group_by(Year) %>% dplyr::summarize(Rainfall.mm=sum(Rainfall))
+      
+      # view(rain_yearly)
+      
+      # create a list of the rain interval results; just the 'Rainfall' from the summarize approach
+
+      # rain_list_1 <- list(rain_hourly,rain_daily,rain_weekly,rain_monthly,rain_yearly)
+
+      rain_list_1 <- list(rain_hourly$Rainfall.mm,rain_daily$Rainfall.mm,rain_weekly$Rainfall.mm,rain_monthly$Rainfall.mm,rain_yearly$Rainfall.mm)
+
+      
+      # use 'map' to convert the list of tibbles to a list of dataframes
+
+      rain_list_1 <- rain_list_1 %>% map(as.data.frame)
+
+      # use 'map' instead of seq_along 'rain_list_1' to apply 'smry' to the list of dataframes
+
+      stats_df_list <- rain_list_1 %>% map(hydroTSM::smry)
+
+      # use 'bind_cols' to combine the list of dataframes to one dataframe
+
+      stats_df_bind_cols <- bind_cols(stats_df_list)
+      
+      # cbind in the rownames so they appear when you knitr to Word
+      
+      stats_df_bind_cols <- cbind(rownames(stats_df_bind_cols),stats_df_bind_cols)
+
+      # add column names
+      # colnames(stats_df_bind_cols) <- c("Hourly","Daily","Weekly","Monthly","Yearly")
+      
+      colnames(stats_df_bind_cols) <- c("Statistic","Hourly","Daily","Weekly","Monthly","Yearly")
+
+      # add Site.Name to the dataframe - this may be optional - under review
+
+      # Site.Name <- rep(site_prefix,nrow(stats_df_bind_cols))
+      # 
+      # stats_df_bind_cols<- data.frame(Site.Name,stats_df_bind_cols)
+
+      # create a file name to save the files for each site
+      CSV_file_name<-paste0(site_prefix,"_stats_summary_hourly_to_yearly.csv")
+      CSV_outfile<-file.path(stats_folder_1, CSV_file_name)
+
+      # write the results to .CSV file
+      write.table(stats_df_bind_cols,CSV_outfile,sep=",",col.names=NA,row.names=TRUE)
+      
+      ##### Page Break
+
+     
+       # use the 'flextable' package to create table
+      
+      # create table caption (dynamic)
+      table_caption<-paste0(site_prefix,' Summary Statistics: Hourly to Yearly Rainfall (May to September)')            
+      
+      stats_df_bind_cols %>%  flextable() %>%
+      # set_caption(caption = table_caption) %>%
+      # fontsize(size = 10, part = "all") %>%
+      colformat_double(j=c(2:6),digits = 3) %>%
+      colformat_double(i=c(12,13),digits = 0) %>%
+      theme_vanilla() %>%
+      # fit_to_width(max_width = 8)
+      autofit()
+
+
+```
+
+
+\elandscape

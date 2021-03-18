@@ -58,6 +58,7 @@ library(hydroTSM)
 library(cowplot)
 library(flextable)
 library(officer) #see page 30 'flextable' package
+# library(readxl)
 
 panderOptions('knitr.auto.asis', FALSE)
 
@@ -104,15 +105,25 @@ rm(list=ls())
     
       # read the ACIS climate data
       climate_daily<-read.csv(x,header = TRUE,sep=",",stringsAsFactors = FALSE)
-    
-    
+      
+      # rename the second column
       names(climate_daily)[2]<-"Date"
       
+      # force the dates to be class character
+      climate_daily$Date <- as.character(climate_daily$Date)
+      
+      
       # create Dates from character strings
-      dformat<-"%d-%B-%Y"
+      dformat<-"%d-%b-%y"
       climate_daily$Date<-as.Date(climate_daily$Date,dformat)
       climate_daily<- climate_daily[,c(1,2,3,5,8,11,14,17)]
       names(climate_daily) <- c("Station.Name","Date","Tdew","Tmin","Tmax","Tmean","Rs","u10")
+      
+      ## diagnostic only
+      climate_daily_df<- climate_daily
+      names(climate_daily_df) <- c("Station.Name","Date","Tdew","Tmin","Tmax","Tmean","Rs","u10")
+
+      view(climate_daily_df)
      
       # convert to tibble
       climate_daily<-as_tibble(climate_daily)
@@ -121,6 +132,7 @@ rm(list=ls())
       
       # add Year / Month / Day / DOY
       climate_daily<-mutate(climate_daily,Year=year(Date),Month=month(Date),Day=mday(Date),DOY=yday(Date))
+      
       
       # summarize missing data by column
       Missing.Count<-apply(is.na(climate_daily),2,sum)
@@ -135,7 +147,7 @@ rm(list=ls())
       # climate_daily$u10[u10_missing]<-16.1
       
       # adjust wind speed units from km/hr to m/s
-      # climate_daily<-mutate(climate_daily,u10=u10*(1000/3600))
+      climate_daily<-mutate(climate_daily,u10=u10*(1000/3600))
       
       # adjust wind speed to 2m height ** Eq. (S5.20 McMahon)
       z<-10
@@ -195,8 +207,8 @@ rm(list=ls())
       if(dir.exists(ET_folder_1) == FALSE) dir.create(ET_folder_1)
       
       
-      # extract the year from the raw data filename
-      raw_year <- str_extract(x,"[0-9] {4}")
+      # extract the four numeric digits which are the year in the filename
+      raw_year <- str_extract(x,"[0-9][0-9][0-9][0-9]")
       
     
       # create a file name to save the files for each site (** dynamic **)

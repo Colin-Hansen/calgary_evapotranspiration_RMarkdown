@@ -109,8 +109,8 @@ rm(list=ls())
       # rename the second column
       names(climate_daily)[2]<-"Date"
       
-      # force the dates to be class character
-      climate_daily$Date <- as.character(climate_daily$Date)
+      # force the dates to be class character - ** disabled for now **
+      # climate_daily$Date <- as.character(climate_daily$Date) 
       
       
       # create Dates from character strings
@@ -118,6 +118,9 @@ rm(list=ls())
       climate_daily$Date<-as.Date(climate_daily$Date,dformat)
       climate_daily<- climate_daily[,c(1,2,3,5,8,11,14,17)]
       names(climate_daily) <- c("Station.Name","Date","Tdew","Tmin","Tmax","Tmean","Rs","u10")
+      
+      # print(str(climate_daily))
+      
       
       ## diagnostic only
       climate_daily_df<- climate_daily
@@ -258,192 +261,61 @@ rm(list=ls())
 
 \blandscape
 
-## Some text ... 
-
-## Some more text ... 
-
-
-```{r stats-part-1, eval= FALSE, echo = FALSE,include = TRUE, message=FALSE, warning=FALSE, results = 'asis'}
-
-
-  # read a single .CSV file; generate basic summary stastics
-
-    # the name of the CSV file
-    csv_name<-list.files('data_out/MASTER_CSV_5_min')
-  
-      # specify the CSV directory location and path to read the CSV file
-      CSV_folder<-'data_out/MASTER_CSV_5_min'
-      CSV_infile<-file.path(CSV_folder, csv_name)
-      
-      # create site name prefix
-      site_prefix<-strtrim(csv_name,3)
-      # print(site_prefix)
-      
-      # create directory to save statistics results - 5 minute data
-      stats_folder_1<-'data_out/Stats_Summary_1'
-      
-      # create (if necessary) directory - ** first part
-      if(dir.exists(stats_folder_1) == FALSE) dir.create(stats_folder_1)
-      
-      # create directory to save statistics results
-      stats_folder_2<-'data_out/Stats_Summary_2'
-      
-      # create (if necessary) directory - ** first part
-      if(dir.exists(stats_folder_2) == FALSE) dir.create(stats_folder_2)
-      
-      # create directory to save statistics results
-      stats_folder_3<-'data_out/Stats_Summary_3'
-      
-      # create (if necessary) directory - ** first part
-      if(dir.exists(stats_folder_3) == FALSE) dir.create(stats_folder_3)
-      
-      # create directory to save statistics results
-      stats_folder_4<-'data_out/Stats_Summary_4'
-      
-      # create (if necessary) directory - ** first part
-      if(dir.exists(stats_folder_4) == FALSE) dir.create(stats_folder_4)
-      
-     
-      # delete any previous .CSV files in 'stats_folder_2/3/4'
-      files_to_remove<-dir('data_out/Stats_Summary_2',full.names = TRUE)
-      file.remove(files_to_remove)
-      
-      files_to_remove<-dir('data_out/Stats_Summary_3',full.names = TRUE)
-      file.remove(files_to_remove)
-      
-      files_to_remove<-dir('data_out/Stats_Summary_4',full.names = TRUE)
-      file.remove(files_to_remove)
-      
-      
-      
-      # read the rainfall data for one site using 'read_csv'
-      rain_5_min<-read_csv(CSV_infile,col_names = TRUE)
-      
-      view(head(rain_5_min))
-      
-      # get basic stats on the 5 minute rainfall data
-      
-      site.name <- rain_5_min$Site.Name[1]
-      
-      mean <- mean(rain_5_min$Rainfall,na.rm = TRUE)
-      
-      sd <- sd(rain_5_min$Rainfall,na.rm = TRUE)
-      
-      max <- max(rain_5_min$Rainfall,na.rm = TRUE)
-      
-      n.total <- nrow(rain_5_min)
-      
-      n.NA <- sum(is.na(rain_5_min$Rainfall))
-      
-      pct.missing <- (n.NA/n.total)*100
-      
-      n.non.zero <- nrow(subset(rain_5_min,Rainfall > 0))
-      
-      pct.non.zero <- (n.non.zero/n.total)*100
-      
-      n.May.to.Sept <- rain_5_min %>% filter(Month >= 5 & Month <= 9)
-      
-      n.May.to.Sept <- nrow(n.May.to.Sept)
-      
-      pct.May.to.Sept <- (n.May.to.Sept/n.total)*100
-      
-      # create dataframe of the results
-      
-      stats_5_min_df <- data.frame("Site.Name"=site.name,
-                                    "mean"=mean,
-                                    "std.dev"=sd,
-                                    "max"=max,
-                                    "n.total"=n.total,
-                                    "n.NA"=n.NA,
-                                    "pct.missing"=pct.missing,
-                                    "n.non.zero"=n.non.zero,
-                                    "pct.non.zero"=pct.non.zero,
-                                    "n.May.to.Sept"=n.May.to.Sept,
-                                    "pct.May.to.Sept"=pct.May.to.Sept)  
-      
-     
-      # keep the following line; but not sure if it works
-      # cat("\\newpage")
-      
-      
-      
-      # use the 'flextable' package to create table
-      
-      # set up a standard border to 'flextable'; requires 'officer' package
-      std_border <- fp_border(color="black",width=1.5)
-      
-      # KEEP THE FOLLOWING FOR NOW:
-      
-      # stats_5_min_df %>%  flextable() %>% 
-      # align(align="center",part = "all") %>% 
-      # set_caption(caption = "Rainfall Statistics: 5 minute Data") %>% 
-      # # font(fontname = "Calibri (Body)", part = "all") %>% 
-      # # fontsize(size = 10, part = "body") %>% 
-      # # add footer if you want
-      # # add_footer_row(values = "* p < 0.05. ** p < 0.01. *** p < 0.001.", 
-      # #                colwidths = 4) %>% 
-      # bold(bold=TRUE,part = "header") %>% 
-      # border_inner(border=std_border,part = "all") %>%
-      # fit_to_width(max_width = 8) %>%
-      # bg(bg="#EFEFEF") 
-      # # next line disabled  
-      # # autofit()
-          
-      # use the 'flextable' package to create table
-      
-      # the following is necessary to allow pdf-latex to be used (see page 96 'flextable' manual)
-      set_flextable_defaults(fonts_ignore=TRUE)
-      
-      # create table caption (dynamic)
-      table_caption<-paste0(site_prefix,' Rainfall Statistics: 5 minute Data')      
-      
-      stats_5_min_df %>%  flextable() %>%
-      # set_caption(caption = table_caption) %>%
-      fontsize(size = 10, part = "all") %>%
-      colformat_double(j=c(2,3,9,11),digits = 4) %>% 
-      theme_vanilla() %>%
-      fit_to_width(max_width = 8)
-      # # autofit()
-          
-       # insert line breaks
-      # cat("<br/>")
-      # cat("<br/>")
-      # cat("<br/>")
-    
-
-``` 
-\elandscape
-
 
 ## Reference ET Statistics ...
 
 
-```{r stats-part-2, eval= FALSE, echo = FALSE,include = TRUE, message=FALSE, warning=FALSE, results = 'asis'}
+```{r ET-stats-part-1, eval= FALSE, echo = FALSE,include = TRUE, message=FALSE, warning=FALSE, results = 'asis'}
 
- 
- # filter for the May to September rainfall
-      rain_5_min_may_sept <- rain_5_min %>% filter(Month >= 5 & Month <= 9)
+
+    # read the ET results .csv files into a list
+  
+    # get the names of the .csv results files
+    results_filenames<-dir('data_out/Ref_RET_Results_1',full.names = TRUE)
+    
+   
+    # enter loop to create a list of the results filenames; ** may not need this **
+    
+    # create empty list
+    
+    results_filenames_list <- list(NULL)
+    
+    for (q in seq_along(results_filenames)) {  
+    
+    # build the list of raw data filenames 
+      
+    results_filenames_list[q] <- list(results_filenames[q])
+    
+      } # end of 'seq_along(results_filenames)' 
+    
+    
+    
+    
+    
+    # enter loop to create a list of the ET results - 'smry' stats
+    
+    # create empty list
+    
+    smry_stats_list <- list(NULL)
+    
+    
+    for (w in seq_along(results_filenames)) {
+  
+        # read the ET results .csv file
+        ET_results<-read.csv(results_filenames[w],header = TRUE,sep=",",stringsAsFactors = FALSE)
+      
+        # get the summary statistics using 'smry'
+        smry_stats_list[w] <- hydroTSM::smry(ET_results$ET_rc)
       
       
-      # get the hourly / daily / weekly / monthly / yearly rainfall
-      
-      rain_hourly <- rain_5_min_may_sept %>% group_by(Year,Month,Week,Day,Hour) %>% dplyr::summarize(Rainfall.mm=sum(Rainfall))
+      } # end of 'seq_along'
      
-      rain_daily <- rain_5_min_may_sept %>% group_by(Year,Month,Week,Day) %>% dplyr::summarize(Rainfall.mm=sum(Rainfall))
-      
-      rain_weekly <- rain_5_min_may_sept %>% group_by(Year,Month,Week) %>% dplyr::summarize(Rainfall.mm=sum(Rainfall))
-      
-      rain_monthly <- rain_5_min_may_sept %>% group_by(Year,Month) %>% dplyr::summarize(Rainfall.mm=sum(Rainfall))
-      
-      rain_yearly <- rain_5_min_may_sept %>% group_by(Year) %>% dplyr::summarize(Rainfall.mm=sum(Rainfall))
-      
-      # view(rain_yearly)
-      
-      # create a list of the rain interval results; just the 'Rainfall' from the summarize approach
+    
 
-      # rain_list_1 <- list(rain_hourly,rain_daily,rain_weekly,rain_monthly,rain_yearly)
+  ### STOPPED HERE 18-MAR-2021 ###
+  
 
-      rain_list_1 <- list(rain_hourly$Rainfall.mm,rain_daily$Rainfall.mm,rain_weekly$Rainfall.mm,rain_monthly$Rainfall.mm,rain_yearly$Rainfall.mm)
+
 
       
       # use 'map' to convert the list of tibbles to a list of dataframes

@@ -74,28 +74,37 @@ panderOptions('knitr.auto.asis', FALSE)
 rm(list=ls())
 
 
-  # get the names of the raw data files
-  raw_data_filenames<-dir('data_in',full.names = TRUE)
+      # create directory to save the ET results
+      ET_folder_1<-'data_out/Ref_ET_Results_1'
+      
+      # create (if necessary) directory - ** first part
+      if(dir.exists(ET_folder_1) == FALSE) dir.create(ET_folder_1)
+
+
+      # get the names of the raw data files
+      raw_data_filenames<-dir('data_in',full.names = TRUE)
+      
+     
+      # raw_data_filenames<-raw_data_filenames[5:9] # TESTING ONLY
+     
+      
+      # enter loop to create a list of the raw data filenames (e.g. ACISDailyData_2016.csv, etc.)
+      
+      # create empty list
+      
+      raw_data_filenames_list <- list(NULL)
+      
+      for (q in seq_along(raw_data_filenames)) {  
+      
+      # build the list of raw data filenames 
+        
+      raw_data_filenames_list[q] <- list(raw_data_filenames[q])
+      
+        } # end of 'seq_along(raw_data_filenames)' 
+        
+     
   
- 
-  # raw_data_filenames<-raw_data_filenames[5:9] # TESTING ONLY
- 
   
-  # enter loop to create a list of the raw data filenames (e.g. ACISDailyData_2016.csv, etc.)
-  
-  # create empty list
-  
-  raw_data_filenames_list <- list(NULL)
-  
-  for (q in seq_along(raw_data_filenames)) {  
-  
-  # build the list of raw data filenames 
-    
-  raw_data_filenames_list[q] <- list(raw_data_filenames[q])
-  
-    } # end of 'seq_along(raw_data_filenames)' 
-    
- 
  
 
   ### function ###
@@ -126,12 +135,12 @@ rm(list=ls())
       climate_daily_df<- climate_daily
       names(climate_daily_df) <- c("Station.Name","Date","Tdew","Tmin","Tmax","Tmean","Rs","u10")
 
-      view(climate_daily_df)
+      # view(climate_daily_df)
      
       # convert to tibble
       climate_daily<-as_tibble(climate_daily)
       
-      view(climate_daily)
+      # view(climate_daily)
       
       # add Year / Month / Day / DOY
       climate_daily<-mutate(climate_daily,Year=year(Date),Month=month(Date),Day=mday(Date),DOY=yday(Date))
@@ -203,13 +212,6 @@ rm(list=ls())
       climate_daily<-mutate(climate_daily,ET_rc=ET_rad+ET_aero)
       
       
-      # create directory to save the ET results
-      ET_folder_1<-'data_out/Ref_RET_Results_1'
-      
-      # create (if necessary) directory - ** first part
-      if(dir.exists(ET_folder_1) == FALSE) dir.create(ET_folder_1)
-      
-      
       # extract the four numeric digits which are the year in the filename
       raw_year <- str_extract(x,"[0-9][0-9][0-9][0-9]")
       
@@ -221,7 +223,6 @@ rm(list=ls())
       # write the results to .CSV file
       write_csv(climate_daily,CSV_outfile)   
   
-      
             
   }  # end 'process_raw_file_function'
   
@@ -231,28 +232,7 @@ rm(list=ls())
         
     Ref_ET_data_list <- raw_data_filenames_list %>% map(process_raw_file_function)
         
-    # use 'bind_rows' to combine the list of dataframes to one dataframe
-        
-    # ref_ET_data_df <- bind_rows(Ref_ET_data_list)      
-       
-    # view(ref_ET_data_df)
-  
-  
-    # create directory to save the ET results
-    # ET_folder_1<-'data_out/Ref_RET_Results_1'
-      
-    # create (if necessary) directory - ** first part
-    # if(dir.exists(ET_folder_1) == FALSE) dir.create(ET_folder_1)
-  
-    
-    # create a file name to save the files for each site
-    # CSV_file_name<-paste0(single_site_name,"_5_min.csv")
-    # CSV_outfile<-file.path(CSV_master_folder_5_min, CSV_file_name)
-      
-    # write the results to .CSV file
-    # write_csv(ref_ET_data_df,CSV_outfile)   
-  
- 
+   
 
 
 ```
@@ -265,92 +245,114 @@ rm(list=ls())
 ## Reference ET Statistics ...
 
 
-```{r ET-stats-part-1, eval= FALSE, echo = FALSE,include = TRUE, message=FALSE, warning=FALSE, results = 'asis'}
+```{r ET-stats-part-1, eval= TRUE, echo = FALSE,include = TRUE, message=FALSE, warning=FALSE, results = 'asis'}
 
 
-    # read the ET results .csv files into a list
-  
-    # get the names of the .csv results files
-    results_filenames<-dir('data_out/Ref_RET_Results_1',full.names = TRUE)
-    
-   
-    # enter loop to create a list of the results filenames; ** may not need this **
-    
-    # create empty list
-    
-    results_filenames_list <- list(NULL)
-    
-    for (q in seq_along(results_filenames)) {  
-    
-    # build the list of raw data filenames 
-      
-    results_filenames_list[q] <- list(results_filenames[q])
-    
-      } # end of 'seq_along(results_filenames)' 
-    
-    
-    
-    
-    
-    # enter loop to create a list of the ET results - 'smry' stats
-    
-    # create empty list
-    
-    smry_stats_list <- list(NULL)
-    
-    
-    for (w in seq_along(results_filenames)) {
-  
-        # read the ET results .csv file
-        ET_results<-read.csv(results_filenames[w],header = TRUE,sep=",",stringsAsFactors = FALSE)
-      
-        # get the summary statistics using 'smry'
-        smry_stats_list[w] <- hydroTSM::smry(ET_results$ET_rc)
-      
-      
-      } # end of 'seq_along'
-     
-    
-
-  ### STOPPED HERE 18-MAR-2021 ###
-  
-
-
-
+    ## generate summary statistics for each year of ET results
       
       # use 'map' to convert the list of tibbles to a list of dataframes
 
-      rain_list_1 <- rain_list_1 %>% map(as.data.frame)
+      Ref_ET_data_list_df <- Ref_ET_data_list %>% map(as.data.frame)
 
-      # use 'map' instead of seq_along 'rain_list_1' to apply 'smry' to the list of dataframes
+     ### STOPPED HERE 20-MAR-2021 ###
 
-      stats_df_list <- rain_list_1 %>% map(hydroTSM::smry)
+    # convert from list to dataframe
+
+    Ref_ET_data_df <- ldply(Ref_ET_data_list_df)
+
+    # seq_along the Years and get the summary statistics by Year; save in a list
+    
+
+     # create empty list
+      
+      ET_rc_data_smry_list <- list(NULL)
+      
+      # get the unique Years from the dataframe of results
+      
+      unique_years <- unique(Ref_ET_data_df$Year)
+      
+      # seq_along the unique years
+      
+      for (q in seq_along(unique_years)) {  
+      
+        # filter for the Year
+          
+        data_one_year <- Ref_ET_data_df %>% filter(Year==unique_years[q])
+      
+        # apply hydroTSM:smry; assign results to a list
+        
+        ET_rc_data_smry_list[q] <- hydroTSM::smry(data_one_year$ET_rc)
+      
+        
+      } # end of 'seq_along'
+        
+          
+      # assign names to the list
+      
+      names(ET_rc_data_smry_list) <- as.character(unique_years)
+      
+      
+      # use 'bind_cols' to combine the list of dataframes to one dataframe
+
+      ET_rc_data_smry_bind_cols <- bind_cols(ET_rc_data_smry_list)
+
+      # convert from tibble to dataframe
+      
+      ET_rc_data_smry_bind_cols <- as.data.frame(ET_rc_data_smry_bind_cols)
+      
+      
+      
+      
+      
+
+    # function to select only the Year and ET_rc
+
+    select_two_cols <- function(xx){
+      
+      xx %>% select(c(Year,ET_rc))
+      
+      
+    } # end of 'select_two_cols' function
+      
+     
+      # use 'map' to apply 'select_two_cols' to the list of dataframes
+
+      # Ref_ET_data_list_df <- Ref_ET_data_list_df %>% map(select_two_cols)
+
+      # view(Ref_ET_data_list_df)
+      
+
+      # use 'map' to apply 'smry' to the list of dataframes
+
+      Ref_ET_stats_list <- Ref_ET_data_list_df %>% map(hydroTSM::smry)
 
       # use 'bind_cols' to combine the list of dataframes to one dataframe
 
-      stats_df_bind_cols <- bind_cols(stats_df_list)
+      Ref_ET_stats_bind_cols <- bind_cols(Ref_ET_stats_list)
       
       # cbind in the rownames so they appear when you knitr to Word
       
-      stats_df_bind_cols <- cbind(rownames(stats_df_bind_cols),stats_df_bind_cols)
+      Ref_ET_stats_bind_cols <- cbind(rownames(Ref_ET_stats_bind_cols),Ref_ET_stats_bind_cols)
 
       # add column names
-      # colnames(stats_df_bind_cols) <- c("Hourly","Daily","Weekly","Monthly","Yearly")
+      # colnames(Ref_ET_stats_bind_cols) <- c("Hourly","Daily","Weekly","Monthly","Yearly")
       
-      colnames(stats_df_bind_cols) <- c("Statistic","Hourly","Daily","Weekly","Monthly","Yearly")
+      # colnames(Ref_ET_stats_bind_cols) <- c("Statistic","YYC-2016","YYC-2017","Weekly","Monthly","Yearly")
+      
+      # colnames(Ref_ET_stats_bind_cols) <- c("Statistic","YYC-2016","YYC-2017")
 
       # add Site.Name to the dataframe - this may be optional - under review
 
-      # Site.Name <- rep(site_prefix,nrow(stats_df_bind_cols))
+      # Site.Name <- rep(site_prefix,nrow(Ref_ET_stats_bind_cols))
       # 
-      # stats_df_bind_cols<- data.frame(Site.Name,stats_df_bind_cols)
+      # Ref_ET_stats_bind_cols<- data.frame(Site.Name,Ref_ET_stats_bind_cols)
 
       # create a file name to save the files for each site
-      CSV_file_name<-paste0(site_prefix,"_stats_summary_hourly_to_yearly.csv")
-      CSV_outfile<-file.path(stats_folder_1, CSV_file_name)
+      CSV_file_name<-"Summary_Statistics_YYC Reference_ET.csv"
+      CSV_outfile<-file.path(ET_folder_1, CSV_file_name)
 
       # write the results to .CSV file
-      write.table(stats_df_bind_cols,CSV_outfile,sep=",",col.names=NA,row.names=TRUE)
+      write.table(Ref_ET_stats_bind_cols,CSV_outfile,sep=",",col.names=NA,row.names=TRUE)
       
       ##### Page Break
 
@@ -358,16 +360,16 @@ rm(list=ls())
        # use the 'flextable' package to create table
       
       # create table caption (dynamic)
-      table_caption<-paste0(site_prefix,' Summary Statistics: Hourly to Yearly Rainfall (May to September)')            
+      table_caption<-'Summary Statistics: YYC Reference ET'
       
-      stats_df_bind_cols %>%  flextable() %>%
+      # Ref_ET_stats_bind_cols %>%  flextable() %>%
       # set_caption(caption = table_caption) %>%
       # fontsize(size = 10, part = "all") %>%
-      colformat_double(j=c(2:6),digits = 3) %>%
-      colformat_double(i=c(12,13),digits = 0) %>%
-      theme_vanilla() %>%
+      # colformat_double(j=c(2:6),digits = 3) %>%
+      # colformat_double(i=c(12,13),digits = 0) %>%
+      # theme_vanilla() %>%
       # fit_to_width(max_width = 8)
-      autofit()
+      # autofit()
 
 
 ```

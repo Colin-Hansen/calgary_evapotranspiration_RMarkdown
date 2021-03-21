@@ -284,22 +284,26 @@ rm(list=ls())
       # use 'bind_cols' to combine the list of dataframes to one dataframe
 
       ET_rc_only_df <- bind_cols(select_ET_rc_list)
+      
+      
+      
+      
 
-      # view(ET_rc_only_df)
-      
-      
-          
-      # assign names to the list
-      
-      names(select_ET_rc_bind_cols) <- as.character(unique_years)
-     
-      
-   
       # apply 'smry' to the ET_rc dataframe; multiple colunns
 
-      Ref_ET_smry_stats <- hydroTSM::smry(select_ET_rc_bind_cols)
+      Ref_ET_smry_stats <- hydroTSM::smry(ET_rc_only_df)
       
-     
+      
+      
+      
+      # create column headers - by Year
+      col_names<-paste0("Ref.ET - ", unique_years)
+      
+      
+      # assign column names to the dataframe of results
+      names(Ref_ET_smry_stats) <- col_names
+      
+    
       # create a file name to save the files for each site
       CSV_file_name<-"Summary_Statistics_YYC Reference_ET.csv"
       CSV_outfile<-file.path(ET_folder_1, CSV_file_name)
@@ -307,22 +311,32 @@ rm(list=ls())
       # write the results to .CSV file
       write.table(Ref_ET_smry_stats,CSV_outfile,sep=",",col.names=NA,row.names=TRUE)
      
+      
+      # cbind in the rownames so they appear when you knitr to PDF
+      Ref_ET_smry_stats_2<- cbind(rownames(Ref_ET_smry_stats),Ref_ET_smry_stats)
+      
+        
+      # add a column name for 'Statistic' (knitr to PDF)
+      names(Ref_ET_smry_stats_2) <- c("Statistic",col_names)
+      
 
      
        # use the 'flextable' package to create table
       
-      # create table caption (dynamic)
-      table_caption<-'Summary Statistics: YYC Reference ET'
+      # create table caption
+      table_caption<-'Summary Statistics: YYC Reference ET (XXXX-XXXX)'
       
-      # Ref_ET_stats_bind_cols %>%  flextable() %>%
+      Ref_ET_smry_stats_2 %>%  flextable() %>%
       # set_caption(caption = table_caption) %>%
       # fontsize(size = 10, part = "all") %>%
       # colformat_double(j=c(2:6),digits = 3) %>%
       # colformat_double(i=c(12,13),digits = 0) %>%
-      # theme_vanilla() %>%
+      theme_vanilla() %>%
       # fit_to_width(max_width = 8)
-      # autofit()
-
+      autofit()
+     
+      
+     
 
 ```
 

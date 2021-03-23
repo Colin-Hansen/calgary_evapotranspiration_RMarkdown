@@ -285,16 +285,10 @@ rm(list=ls())
 
       ET_rc_only_df <- bind_cols(select_ET_rc_list)
       
-      
-      
-      
 
       # apply 'smry' to the ET_rc dataframe; multiple colunns
 
       Ref_ET_smry_stats <- hydroTSM::smry(ET_rc_only_df)
-      
-      
-      
       
       # create column headers - by Year
       col_names<-paste0("Ref.ET - ", unique_years)
@@ -342,3 +336,45 @@ rm(list=ls())
 
 
 \elandscape
+
+## Boxplot of the YYC - Daily Reference ET Values (by Year)
+
+```{r charts-part-1, eval= TRUE,echo = FALSE,include = TRUE, message=FALSE, warning=FALSE, results = 'asis',fig.width=10,fig.asp=0.618}
+
+    # plot boxplot of the daily ET data - by Year
+
+      # create the folder location to save the .PNG file1" (dynamic)
+      # save_PNG_folder<-paste0('Frequency Analysis_2/data_out',"/",site_prefix)
+      
+      # create chart title - FIXED ON MIT 60
+      chart_title<-"YYC - Reference ET by Year"
+      # create chart PNG outfile name (dynamic)
+      # outfile_name<-paste0(site_prefix,"_", "MIT_", MIT_value[i],"_Boxplot.png")
+     
+      # boxplot by Year
+     
+      p1<-ggplot(data=Ref_ET_data_df, aes(x=factor(Year),y=ET_rc,fill=Year)) +
+        geom_boxplot() +
+        stat_boxplot(geom='errorbar',width=0.3) +  # adds horiz. lines to whiskers
+        theme(axis.title.y = element_text(size = 12)) +
+        #rotate x-axis test 90 degrees
+        theme(axis.text.x = element_text(angle = 45,vjust = 0.5,size = 11)) +
+        ylab("(mm)") +
+        xlab("") +
+        #expand_limits(y=c(100,600)) +
+        # scale_y_continuous(trans = log10_trans()) +
+        guides(fill=FALSE) +
+        theme(plot.title = element_text(hjust = 0.5)) +
+        theme(plot.title = element_text(size = 12)) +
+        ggtitle(chart_title)
+      #   outfile<-file.path(save_PNG_folder,outfile_name)
+      # ggsave(outfile,p1,width= 8, height=4.944, dpi=600,units=c("in"))
+       print(p1)
+
+
+
+
+
+
+```
+
